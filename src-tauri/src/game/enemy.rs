@@ -27,36 +27,34 @@ pub struct Enemy {
 impl Enemy {
     pub fn new(id: u32, kind: EnemyKind, x: f64, y: f64) -> Self {
         match kind {
-            // Drone: 1HP, dies to 1 Gatling shot. Dangerous in swarms.
             EnemyKind::Drone => Self {
                 id, kind, x, y,
                 hp: 1.0, max_hp: 1.0,
                 speed: 65.0,
-                damage: 10.0,
+                damage: 8.0,
                 alive: true,
                 can_shoot: false,
                 fire_cooldown: 0.0,
                 fire_timer: 0.0,
                 size: 4.0,
             },
-            // Fighter: needs ~3 Laser hits or ~5 Gatling hits. Shoots back.
             EnemyKind::Fighter => Self {
                 id, kind, x, y,
-                hp: 5.0, max_hp: 5.0,
-                speed: 80.0,
-                damage: 15.0,
+                hp: 4.0, max_hp: 4.0,
+                speed: 75.0,
+                damage: 12.0,
                 alive: true,
                 can_shoot: true,
-                fire_cooldown: 1.2,
+                fire_cooldown: 1.5,
                 fire_timer: 0.0,
                 size: 6.0,
             },
-            // Tank: needs ~14 Cannon hits or a LOT of Gatling. Slow but devastating.
+            // Tank: ~8 Cannon hits to kill, slow but tough
             EnemyKind::Tank => Self {
                 id, kind, x, y,
-                hp: 160.0, max_hp: 160.0,
-                speed: 22.0,
-                damage: 50.0,
+                hp: 80.0, max_hp: 80.0,
+                speed: 20.0,
+                damage: 40.0,
                 alive: true,
                 can_shoot: false,
                 fire_cooldown: 0.0,

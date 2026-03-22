@@ -6,3 +6,5 @@ pub mod wave;
 pub mod core;
 pub mod spirit;
 pub mod drone;
+pub mod anomaly;
+pub mod player;

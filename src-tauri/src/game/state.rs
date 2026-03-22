@@ -7,6 +7,8 @@ use crate::game::projectile::{Projectile, ProjectileKind, ProjectileOwner};
 use crate::game::wave::Wave;
 use crate::game::spirit::{self, SpiritLink, SpiritTriangle};
 use crate::game::drone::{HiveDrone, DroneState};
+use crate::game::anomaly::BlackHole;
+use crate::game::player::{PlayerShip, PlayerInput};
 
 pub const WORLD_W: f64 = 1536.0;
 pub const WORLD_H: f64 = 864.0;
@@ -33,6 +35,15 @@ pub fn is_in_zone(x: f64, y: f64) -> bool {
     if x < PLACE_X_MIN || x > PLACE_X_MAX { return false; }
     let (y_min, y_max) = zone_y_range(x);
     y >= y_min && y <= y_max
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LightningArc {
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    pub life: f64, // fades out
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -85,6 +96,13 @@ pub struct GameState {
     pub spirit_time: f64,
     pub hive_drones: Vec<HiveDrone>,
     pub next_drone_id: u32,
+    pub lightning_arcs: Vec<LightningArc>,
+    pub black_holes: Vec<BlackHole>,
+    pub next_bh_id: u32,
+    pub bh_spawn_timer: f64,
+    pub player: PlayerShip,
+    #[serde(skip)]
+    pub player_input: PlayerInput,
 }
 
 impl GameState {
@@ -119,6 +137,12 @@ impl GameState {
             spirit_time: 0.0,
             hive_drones: vec![],
             next_drone_id: 1,
+            lightning_arcs: vec![],
+            black_holes: vec![],
+            next_bh_id: 1,
+            bh_spawn_timer: 20.0,
+            player: PlayerShip::new(200.0, WORLD_H / 2.0),
+            player_input: PlayerInput::default(),
         }
     }
 
@@ -142,18 +166,18 @@ impl GameState {
             if self.wave_cooldown <= 0.0 {
                 self.wave_active = true;
                 self.wave.started = true;
-            } else {
-                return;
             }
         }
 
         self.recalc_tower_energy();
         self.spawn_enemies(dt);
+        self.tick_black_holes(dt);
         self.move_enemies(dt);
         self.towers_shoot(dt);
         self.core_shoot(dt);
         self.enemies_shoot(dt);
         self.tick_hive_drones(dt);
+        self.tick_player(dt);
         self.move_projectiles(dt);
         self.check_collisions();
         self.check_enemy_reach_core();
@@ -203,6 +227,136 @@ impl GameState {
             self.wave.current_spawn_index += 1;
             self.wave.spawned_in_current = 0;
         }
+    }
+
+    fn tick_black_holes(&mut self, dt: f64) {
+        let mut rng = rand::thread_rng();
+
+        // Spawn timer
+        if self.wave_active {
+            self.bh_spawn_timer -= dt;
+            if self.bh_spawn_timer <= 0.0 {
+                // Spawn on defense zone borders: right, top, bottom (not left/core side)
+                let side = rng.gen_range(0u32..3);
+                let (x, y) = match side {
+                    0 => { // right border
+                        let yy = rng.gen_range(100.0..WORLD_H - 100.0);
+                        (PLACE_X_MAX + rng.gen_range(-30.0..30.0), yy)
+                    },
+                    1 => { // top border
+                        let xx = rng.gen_range(PLACE_X_MIN + 100.0..PLACE_X_MAX);
+                        let (y_min, _) = zone_y_range(xx);
+                        (xx, y_min + rng.gen_range(-20.0..20.0))
+                    },
+                    _ => { // bottom border
+                        let xx = rng.gen_range(PLACE_X_MIN + 100.0..PLACE_X_MAX);
+                        let (_, y_max) = zone_y_range(xx);
+                        (xx, y_max + rng.gen_range(-20.0..20.0))
+                    },
+                };
+
+                {
+                    let bh = BlackHole::new(self.next_bh_id, x, y);
+                    self.next_bh_id += 1;
+                    self.black_holes.push(bh);
+                }
+
+                // Next spawn: 15-30 seconds
+                self.bh_spawn_timer = rng.gen_range(15.0..30.0);
+            }
+        }
+
+        // Update existing black holes
+        for bh in &mut self.black_holes {
+            bh.lifetime -= dt;
+            bh.rotation += dt * 3.0;
+        }
+
+        // Pull enemies toward black holes
+        let bh_snap: Vec<(f64, f64, f64, f64, f64)> = self.black_holes.iter()
+            .filter(|b| b.lifetime > 0.0)
+            .map(|b| (b.x, b.y, b.pull_radius, b.pull_force, b.kill_radius))
+            .collect();
+
+        for enemy in &mut self.enemies {
+            if !enemy.alive { continue; }
+            for &(bx, by, pr, pf, kr) in &bh_snap {
+                let dx = bx - enemy.x;
+                let dy = by - enemy.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                if dist < pr {
+                    // Pull strength increases as you get closer (inverse)
+                    let strength = pf * (1.0 - dist / pr) * dt;
+                    enemy.x += (dx / dist) * strength;
+                    enemy.y += (dy / dist) * strength;
+
+                    // Kill if sucked into center
+                    if dist < kr {
+                        enemy.alive = false;
+                    }
+                }
+            }
+        }
+
+        // Pull towers (displacement, destroy if too close)
+        // We collect tower ids to remove after iteration
+        let mut towers_to_remove = vec![];
+        for tower in &mut self.towers {
+            for &(bx, by, pr, pf, kr) in &bh_snap {
+                let dx = bx - tower.x;
+                let dy = by - tower.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                if dist < pr {
+                    let strength = pf * 0.3 * (1.0 - dist / pr) * dt; // towers resist more
+                    tower.x += (dx / dist) * strength;
+                    tower.y += (dy / dist) * strength;
+
+                    if dist < kr {
+                        towers_to_remove.push(tower.id);
+                    }
+                }
+            }
+        }
+        for tid in &towers_to_remove {
+            self.towers.retain(|t| t.id != *tid);
+            self.spirit_links.retain(|l| l.tower_a != *tid && l.tower_b != *tid);
+            self.hive_drones.retain(|d| d.hive_id != *tid);
+        }
+        if !towers_to_remove.is_empty() {
+            self.recalc_triangles();
+        }
+
+        // Pull hive drones
+        for drone in &mut self.hive_drones {
+            for &(bx, by, pr, pf, _kr) in &bh_snap {
+                let dx = bx - drone.x;
+                let dy = by - drone.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                if dist < pr {
+                    let strength = pf * 0.5 * (1.0 - dist / pr) * dt;
+                    drone.x += (dx / dist) * strength;
+                    drone.y += (dy / dist) * strength;
+                }
+            }
+        }
+
+        // Pull projectiles
+        for proj in &mut self.projectiles {
+            if !proj.alive { continue; }
+            for &(bx, by, pr, pf, _kr) in &bh_snap {
+                let dx = bx - proj.x;
+                let dy = by - proj.y;
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                if dist < pr {
+                    let strength = pf * 2.0 * (1.0 - dist / pr) * dt;
+                    proj.vx += (dx / dist) * strength;
+                    proj.vy += (dy / dist) * strength;
+                }
+            }
+        }
+
+        // Remove expired
+        self.black_holes.retain(|b| b.lifetime > 0.0);
     }
 
     fn move_enemies(&mut self, dt: f64) {
@@ -323,25 +477,54 @@ impl GameState {
     }
 
     fn core_shoot(&mut self, dt: f64) {
+        // Fade out old lightning arcs
+        for arc in &mut self.lightning_arcs {
+            arc.life -= dt;
+        }
+        self.lightning_arcs.retain(|a| a.life > 0.0);
+
         self.core.fire_timer -= dt;
         if self.core.fire_timer > 0.0 { return; }
 
-        let mut best: Option<(f64, f64, f64)> = None;
-        for e in &self.enemies {
-            if !e.alive { continue; }
-            let dx = e.x - self.core.x;
-            let dy = e.y - self.core.y;
+        // Lightning strike ALL enemies in range
+        let cx = self.core.x;
+        let cy = self.core.y;
+        let range = self.core.range;
+        let dmg = self.core.damage;
+        let mut hit_any = false;
+
+        for enemy in &mut self.enemies {
+            if !enemy.alive { continue; }
+            let dx = enemy.x - cx;
+            let dy = enemy.y - cy;
             let dist = (dx * dx + dy * dy).sqrt();
-            if dist <= self.core.range {
-                if best.is_none() || dist < best.unwrap().2 {
-                    best = Some((e.x, e.y, dist));
+            if dist <= range {
+                self.stats.damage_dealt += dmg.min(enemy.hp);
+                enemy.take_damage(dmg);
+                hit_any = true;
+
+                // Create visual lightning arc to this enemy
+                self.lightning_arcs.push(LightningArc {
+                    x1: cx, y1: cy,
+                    x2: enemy.x, y2: enemy.y,
+                    life: 0.15,
+                });
+
+                if !enemy.alive {
+                    let wb = 1 + self.wave.number.saturating_sub(10) / 10;
+                    let (score_val, money_val) = match enemy.kind {
+                        EnemyKind::Drone => { self.stats.drones_killed += 1; (10 * wb, 4 * wb) },
+                        EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25 * wb, 12 * wb) },
+                        EnemyKind::Tank => { self.stats.tanks_killed += 1; (100 * wb, 35 * wb) },
+                    };
+                    self.score += score_val;
+                    self.money += money_val;
+                    self.stats.money_earned += money_val;
                 }
             }
         }
 
-        if let Some((ex, ey, _)) = best {
-            let proj = Projectile::new(self.core.x, self.core.y, ex, ey, self.core.damage, ProjectileOwner::Core, ProjectileKind::Core);
-            self.projectiles.push(proj);
+        if hit_any {
             self.core.fire_timer = self.core.fire_cooldown;
         }
     }
@@ -369,6 +552,128 @@ impl GameState {
         }
 
         self.projectiles.extend(new_projectiles);
+    }
+
+    fn tick_player(&mut self, dt: f64) {
+        let p = &mut self.player;
+
+        // Respawn logic
+        if !p.alive {
+            p.respawn_timer -= dt;
+            if p.respawn_timer <= 0.0 {
+                p.alive = true;
+                p.hp = p.max_hp * 0.5; // respawn at 50% hp
+                p.x = self.core.x + 60.0;
+                p.y = self.core.y;
+                p.invuln_timer = 2.0; // 2 sec invulnerability
+            }
+            return;
+        }
+
+        p.invuln_timer = (p.invuln_timer - dt).max(0.0);
+        p.engine_phase += dt * 12.0;
+
+        // Movement
+        let input = &self.player_input;
+        let mut vx = 0.0f64;
+        let mut vy = 0.0f64;
+        if input.up { vy -= 1.0; }
+        if input.down { vy += 1.0; }
+        if input.left { vx -= 1.0; }
+        if input.right { vx += 1.0; }
+        let vmag = (vx * vx + vy * vy).sqrt();
+        if vmag > 0.0 {
+            vx /= vmag;
+            vy /= vmag;
+            p.x += vx * p.speed * dt;
+            p.y += vy * p.speed * dt;
+            p.angle = vy.atan2(vx);
+        }
+
+        p.x = p.x.clamp(20.0, WORLD_W - 20.0);
+        p.y = p.y.clamp(20.0, WORLD_H - 20.0);
+
+        // Heal near core
+        let dx = p.x - self.core.x;
+        let dy = p.y - self.core.y;
+        let dist_to_core = (dx * dx + dy * dy).sqrt();
+        if dist_to_core < self.core.radius + 60.0 && p.hp < p.max_hp {
+            p.hp = (p.hp + p.heal_rate * dt).min(p.max_hp);
+        }
+
+        // Shooting — multi-shot fan
+        p.fire_timer -= dt;
+        if input.fire && p.fire_timer <= 0.0 {
+            let mut best: Option<(f64, f64, f64)> = None;
+            for e in &self.enemies {
+                if !e.alive { continue; }
+                let edx = e.x - p.x;
+                let edy = e.y - p.y;
+                let edist = (edx * edx + edy * edy).sqrt();
+                if best.is_none() || edist < best.unwrap().2 {
+                    best = Some((e.x, e.y, edist));
+                }
+            }
+
+            if let Some((ex, ey, _)) = best {
+                let base_angle = (ey - p.y).atan2(ex - p.x);
+                let spread = p.shot_spread;
+                let fan_angle = 0.12; // radians between shots
+
+                for i in 0..spread {
+                    let offset = (i as f64 - (spread as f64 - 1.0) / 2.0) * fan_angle;
+                    let a = base_angle + offset;
+                    let tx = p.x + a.cos() * 500.0;
+                    let ty = p.y + a.sin() * 500.0;
+                    let proj = Projectile::new(
+                        p.x, p.y, tx, ty,
+                        p.damage,
+                        ProjectileOwner::Tower(0),
+                        ProjectileKind::PlayerShot,
+                    );
+                    self.projectiles.push(proj);
+                }
+                p.fire_timer = p.fire_cooldown;
+            }
+        }
+
+        // Check enemy projectile hits on player
+        for proj in &mut self.projectiles {
+            if !proj.alive { continue; }
+            if let ProjectileOwner::Enemy(_) = proj.owner {
+                let pdx = proj.x - p.x;
+                let pdy = proj.y - p.y;
+                let pdist = (pdx * pdx + pdy * pdy).sqrt();
+                if pdist < 10.0 {
+                    p.take_damage(proj.damage);
+                    proj.alive = false;
+                }
+            }
+        }
+
+        // Check collision with enemies (kamikaze contact)
+        for enemy in &mut self.enemies {
+            if !enemy.alive { continue; }
+            let edx = enemy.x - p.x;
+            let edy = enemy.y - p.y;
+            let edist = (edx * edx + edy * edy).sqrt();
+            if edist < enemy.size + 8.0 {
+                p.take_damage(enemy.damage * 0.5);
+                enemy.take_damage(p.damage * 2.0); // ship rams enemy
+                if !enemy.alive {
+                    let wb = 1 + self.wave.number.saturating_sub(10) / 10;
+                    let (sv, mv) = match enemy.kind {
+                        EnemyKind::Drone => { self.stats.drones_killed += 1; (10*wb, 4*wb) },
+                        EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25*wb, 12*wb) },
+                        EnemyKind::Tank => { self.stats.tanks_killed += 1; (100*wb, 35*wb) },
+                    };
+                    self.score += sv;
+                    self.money += mv;
+                    self.stats.money_earned += mv;
+                    p.gain_xp(sv / 2);
+                }
+            }
+        }
     }
 
     fn tick_hive_drones(&mut self, dt: f64) {
@@ -455,7 +760,7 @@ impl GameState {
                                 self.stats.damage_dealt += drone.damage.min(enemy.hp);
                                 enemy.take_damage(drone.damage);
                                 if !enemy.alive {
-                                    let wb = 1 + self.wave.number / 5;
+                                    let wb = 1 + self.wave.number.saturating_sub(10) / 10;
                                     let (score_val, money_val) = match enemy.kind {
                                         EnemyKind::Drone => { self.stats.drones_killed += 1; (10 * wb, 4 * wb) },
                                         EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25 * wb, 12 * wb) },
@@ -558,18 +863,29 @@ impl GameState {
 
             match proj.owner {
                 ProjectileOwner::Tower(_) | ProjectileOwner::Core => {
+                    let is_piercing = proj.kind == ProjectileKind::Cannon;
+
                     for enemy in &mut self.enemies {
                         if !enemy.alive { continue; }
+                        // Skip already-pierced enemies
+                        if is_piercing && proj.pierced_ids.contains(&enemy.id) { continue; }
+
                         let dx = proj.x - enemy.x;
                         let dy = proj.y - enemy.y;
                         let dist = (dx * dx + dy * dy).sqrt();
                         if dist < enemy.size + proj.size {
                             self.stats.damage_dealt += proj.damage.min(enemy.hp);
                             enemy.take_damage(proj.damage);
-                            proj.alive = false;
+
+                            if is_piercing {
+                                // Cannon: don't die, remember hit, keep going
+                                proj.pierced_ids.push(enemy.id);
+                            } else {
+                                proj.alive = false;
+                            }
+
                             if !enemy.alive {
-                                // Rewards scale with wave number
-                                let wave_bonus = 1 + self.wave.number / 5;
+                                let wave_bonus = 1 + self.wave.number.saturating_sub(10) / 10;
                                 let (score_val, money_val) = match enemy.kind {
                                     EnemyKind::Drone =>  { self.stats.drones_killed += 1; (10 * wave_bonus, 4 * wave_bonus) },
                                     EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25 * wave_bonus, 12 * wave_bonus) },
@@ -579,7 +895,7 @@ impl GameState {
                                 self.money += money_val;
                                 self.stats.money_earned += money_val;
                             }
-                            break;
+                            if !is_piercing { break; }
                         }
                     }
                 }
@@ -631,7 +947,7 @@ impl GameState {
             self.wave = Wave::generate(next);
             self.wave_active = false;
             self.wave_cooldown = 5.0;
-            let wave_reward = 30 + next * 10; // scales with wave
+            let wave_reward = 20 + next * 5; // modest wave bonus
             self.money += wave_reward;
             self.stats.money_earned += wave_reward;
             self.stats.waves_survived += 1;

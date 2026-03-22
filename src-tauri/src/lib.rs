@@ -2,6 +2,7 @@ mod game;
 
 use game::state::{GameState, GameStats, PlacementResult};
 use game::tower::TowerKind;
+use game::player::PlayerInput;
 use std::sync::Mutex;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -71,6 +72,24 @@ fn check_placement(state: State<AppState>, x: f64, y: f64, kind: TowerKind) -> P
 #[tauri::command]
 fn create_spirit_link(state: State<AppState>, tower_a: u32, tower_b: u32) -> bool {
     state.game.lock().unwrap().create_spirit_link(tower_a, tower_b)
+}
+
+#[tauri::command]
+fn set_player_input(state: State<AppState>, input: PlayerInput) {
+    state.game.lock().unwrap().player_input = input;
+}
+
+#[tauri::command]
+fn upgrade_ship(state: State<AppState>) -> bool {
+    let mut g = state.game.lock().unwrap();
+    let cost = g.player.upgrade_cost;
+    if g.money >= cost {
+        g.money -= cost;
+        g.stats.money_spent += cost;
+        g.player.upgrade();
+        return true;
+    }
+    false
 }
 
 fn write_stats_log(stats: &GameStats, wave: u32, game_over: bool) {
@@ -150,6 +169,8 @@ pub fn run() {
             move_tower,
             check_placement,
             create_spirit_link,
+            set_player_input,
+            upgrade_ship,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

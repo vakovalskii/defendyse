@@ -19,11 +19,11 @@ impl PlanetCore {
             x,
             y,
             radius: 40.0,
-            hp: 250.0,
-            max_hp: 250.0,
-            damage: 3.0,
-            range: 120.0,
-            fire_cooldown: 0.7,
+            hp: 350.0,
+            max_hp: 350.0,
+            damage: 3.0,       // per enemy per strike
+            range: 130.0,      // lightning range
+            fire_cooldown: 0.6,
             fire_timer: 0.0,
         }
     }

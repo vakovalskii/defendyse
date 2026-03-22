@@ -6,8 +6,8 @@ pub struct SpawnEntry {
     pub kind: EnemyKind,
     pub count: u32,
     pub interval: f64,
-    pub hp_mult: f64,   // scales enemy HP
-    pub speed_mult: f64, // scales enemy speed
+    pub hp_mult: f64,
+    pub speed_mult: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -26,15 +26,15 @@ impl Wave {
         let n = number;
         let mut spawns = vec![];
 
-        // Scaling factor: enemies get stronger every wave
-        // HP multiplier: 1.0 at wave 1, grows ~8% per wave → wave 100 = ~2200x, wave 1000 = insane
-        let hp_scale = 1.0 + (n as f64 - 1.0) * 0.08;
-        // Speed scale: very gentle, caps at 2x
-        let speed_scale = (1.0 + n as f64 * 0.005).min(2.0);
+        // HP scale: +5% per wave (gentler curve, still infinite)
+        // Wave 10: 1.45x, Wave 20: 1.95x, Wave 50: 3.45x, Wave 100: 5.95x
+        let hp_scale = 1.0 + (n as f64 - 1.0) * 0.05;
+        // Speed: very gentle, cap 1.5x
+        let speed_scale = (1.0 + n as f64 * 0.003).min(1.5);
 
-        // Drones: always, count grows linearly + quadratic component
-        let drone_count = 5 + n * 3 + n * n / 50;
-        let drone_interval = (0.5 - n as f64 * 0.005).max(0.08);
+        // Drones: more to compensate for player ship
+        let drone_count = 8 + n * 5 + n * n / 50;
+        let drone_interval = (0.35 - n as f64 * 0.004).max(0.07);
         spawns.push(SpawnEntry {
             kind: EnemyKind::Drone,
             count: drone_count,
@@ -43,10 +43,10 @@ impl Wave {
             speed_mult: speed_scale,
         });
 
-        // Fighters: from wave 2, scale steadily
-        if n >= 2 {
-            let fighter_count = (n - 1) * 2 + n * n / 80;
-            let fighter_interval = (1.0 - n as f64 * 0.008).max(0.2);
+        // Fighters: from wave 3
+        if n >= 3 {
+            let fighter_count = (n - 2) * 2 + n * n / 60;
+            let fighter_interval = (1.2 - n as f64 * 0.006).max(0.3);
             spawns.push(SpawnEntry {
                 kind: EnemyKind::Fighter,
                 count: fighter_count,
@@ -56,16 +56,16 @@ impl Wave {
             });
         }
 
-        // Tanks: from wave 3, scale slower but HP scales hard
-        if n >= 3 {
-            let tank_count = ((n - 2) as f64 * 0.8).ceil() as u32 + n * n / 200;
-            let tank_interval = (2.5 - n as f64 * 0.01).max(0.8);
+        // Tanks: from wave 5, give player time to build up
+        if n >= 5 {
+            let tank_count = ((n - 4) as f64 * 0.8).ceil() as u32 + n * n / 200;
+            let tank_interval = (3.0 - n as f64 * 0.01).max(1.2);
             spawns.push(SpawnEntry {
                 kind: EnemyKind::Tank,
                 count: tank_count,
                 interval: tank_interval,
-                hp_mult: hp_scale * 1.1, // tanks scale slightly faster
-                speed_mult: speed_scale * 0.9, // but stay slower
+                hp_mult: hp_scale,
+                speed_mult: speed_scale * 0.9,
             });
         }
 

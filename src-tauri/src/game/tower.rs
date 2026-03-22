@@ -34,12 +34,12 @@ impl Tower {
             },
             TowerKind::Cannon => Self {
                 id, kind, x, y,
-                damage: 12.0, range: 170.0, fire_cooldown: 2.2,
+                damage: 15.0, range: 180.0, fire_cooldown: 1.8,
                 fire_timer: 0.0, level: 1, cost: 90, max_drones: 0, energy: 1.0,
             },
             TowerKind::Laser => Self {
                 id, kind, x, y,
-                damage: 2.0, range: 70.0, fire_cooldown: 0.25,
+                damage: 2.5, range: 80.0, fire_cooldown: 0.22,
                 fire_timer: 0.0, level: 1, cost: 65, max_drones: 0, energy: 1.0,
             },
             TowerKind::Hive => Self {

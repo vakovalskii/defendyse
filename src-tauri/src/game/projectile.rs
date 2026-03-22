@@ -9,11 +9,12 @@ pub enum ProjectileOwner {
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum ProjectileKind {
-    Gatling,  // fast, small
-    Cannon,   // slow, big, splash
-    Laser,    // instant beam (rendered as line)
-    Core,     // core defense shot
+    Gatling,
+    Cannon,   // piercing plasma — passes through enemies
+    Laser,
+    Core,
     EnemyShot,
+    PlayerShot, // cyan bolts from player ship
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,10 +29,10 @@ pub struct Projectile {
     pub kind: ProjectileKind,
     pub speed: f64,
     pub size: f64,
-    // for laser beam rendering
     pub origin_x: f64,
     pub origin_y: f64,
     pub lifetime: f64,
+    pub pierced_ids: Vec<u32>, // enemies already hit (for piercing)
 }
 
 impl Projectile {
@@ -42,10 +43,11 @@ impl Projectile {
 
         let (speed, size, lifetime) = match kind {
             ProjectileKind::Gatling   => (600.0, 2.0, 5.0),
-            ProjectileKind::Cannon    => (200.0, 6.0, 5.0),
-            ProjectileKind::Laser     => (900.0, 1.5, 0.15), // very fast, short-lived visual
+            ProjectileKind::Cannon    => (250.0, 7.0, 8.0), // bigger, longer life to cross field
+            ProjectileKind::Laser     => (900.0, 1.5, 0.15),
             ProjectileKind::Core      => (350.0, 3.5, 5.0),
             ProjectileKind::EnemyShot => (250.0, 2.5, 5.0),
+            ProjectileKind::PlayerShot => (500.0, 3.0, 4.0),
         };
 
         Self {
@@ -61,6 +63,7 @@ impl Projectile {
             origin_x: x,
             origin_y: y,
             lifetime,
+            pierced_ids: vec![],
         }
     }
 
