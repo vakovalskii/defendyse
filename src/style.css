@@ -1,0 +1,120 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; user-select: none; }
+canvas { display: block; }
+
+/* HUD */
+#hud {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(0,0,0,0.75); padding: 10px 15px;
+  border: 1px solid rgba(100,200,255,0.2); border-radius: 6px;
+  font-size: 13px; line-height: 2;
+  backdrop-filter: blur(4px);
+}
+
+/* Toolbar */
+#toolbar {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 5px;
+  background: rgba(0,0,0,0.75); padding: 8px 10px;
+  border: 1px solid rgba(100,200,255,0.15); border-radius: 6px;
+  backdrop-filter: blur(4px);
+}
+.tb {
+  padding: 5px 10px; background: rgba(20,20,50,0.8);
+  border: 1px solid #444; color: #ccc; border-radius: 3px;
+  cursor: pointer; font-family: inherit; font-size: 11px;
+  transition: all 0.15s;
+}
+.tb:hover { background: rgba(40,40,80,0.8); border-color: #888; }
+.tb.active { border-color: #0f0; color: #0f0; box-shadow: 0 0 8px rgba(0,255,0,0.3); }
+.tb.speed-active { border-color: #ff0; color: #ff0; box-shadow: 0 0 8px rgba(255,255,0,0.3); }
+.sep { width: 1px; background: #333; margin: 0 3px; }
+
+/* Start Menu */
+#main-menu {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 30% 50%, rgba(10,20,60,0.9), rgba(0,0,0,0.97));
+  z-index: 100;
+}
+.sm-title {
+  font-size: 64px; letter-spacing: 12px; color: #4af;
+  text-shadow: 0 0 40px rgba(68,170,255,0.5), 0 0 100px rgba(68,170,255,0.2);
+  margin-bottom: 8px;
+  animation: titlePulse 3s ease-in-out infinite;
+}
+.sm-sub {
+  font-size: 16px; color: #668; letter-spacing: 8px; margin-bottom: 50px;
+}
+.sm-btn {
+  padding: 12px 40px; margin: 6px;
+  background: rgba(20,20,50,0.8); border: 1px solid rgba(100,200,255,0.3);
+  color: #4af; border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 16px; letter-spacing: 3px;
+  transition: all 0.2s;
+}
+.sm-btn:hover {
+  background: rgba(40,40,80,0.9); border-color: #4af;
+  box-shadow: 0 0 20px rgba(68,170,255,0.3);
+}
+.sm-help-btn { font-size: 13px; color: #888; border-color: #444; }
+.sm-help-btn:hover { color: #aaa; }
+#help-panel {
+  margin-top: 20px; max-width: 400px;
+  background: rgba(0,0,0,0.5); padding: 15px 20px;
+  border: 1px solid #333; border-radius: 4px;
+}
+.help-text { font-size: 12px; line-height: 1.8; color: #aaa; }
+.help-text b { color: #fff; }
+@keyframes titlePulse {
+  0%, 100% { text-shadow: 0 0 40px rgba(68,170,255,0.5), 0 0 100px rgba(68,170,255,0.2); }
+  50% { text-shadow: 0 0 60px rgba(68,170,255,0.7), 0 0 140px rgba(68,170,255,0.3); }
+}
+
+/* Game Over */
+#game-over {
+  display: none; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%); text-align: center;
+  background: rgba(0,0,0,0.95); padding: 40px;
+  border: 1px solid #f00; border-radius: 8px;
+  box-shadow: 0 0 60px rgba(255,0,0,0.3); z-index: 50;
+}
+#game-over h1 { color: #f44; font-size: 36px; margin-bottom: 10px; text-shadow: 0 0 30px rgba(255,0,0,0.5); }
+#game-over p { color: #aaa; margin-bottom: 20px; }
+#game-over button {
+  padding: 10px 30px; background: #222; color: #fff;
+  border: 1px solid #666; border-radius: 4px;
+  cursor: pointer; font-family: inherit; font-size: 14px;
+}
+
+/* Wave Banner */
+#wave-banner {
+  display: none; position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px; color: #ff0; letter-spacing: 6px;
+  text-shadow: 0 0 40px #ff0, 0 0 80px rgba(255,255,0,0.3);
+  pointer-events: none; z-index: 40;
+  animation: bannerIn 0.3s ease-out;
+}
+@keyframes bannerIn {
+  from { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Tower Context Menu */
+#tower-menu {
+  display: none; position: absolute;
+  background: rgba(5,5,20,0.95); padding: 8px;
+  border: 1px solid rgba(160,100,255,0.3); border-radius: 4px;
+  font-size: 11px; min-width: 160px; z-index: 10;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 20px rgba(100,50,200,0.2);
+}
+#tower-menu .tm-header { color: #aaa; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #333; }
+#tower-menu .tm-btn {
+  display: block; width: 100%; padding: 5px 8px; margin: 3px 0;
+  background: rgba(20,20,50,0.8); border: 1px solid #444; color: #ccc;
+  border-radius: 3px; cursor: pointer; font-family: inherit;
+  font-size: 11px; text-align: left; transition: all 0.1s;
+}
+#tower-menu .tm-btn:hover { background: rgba(40,40,80,0.8); border-color: #888; }

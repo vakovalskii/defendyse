@@ -51,16 +51,24 @@ impl Tower {
     }
 
     pub fn upgrade_cost(&self) -> u32 {
-        self.cost * self.level
+        // Cost grows: base * level * sqrt(level) — affordable early, expensive late
+        let l = self.level as f64;
+        (self.cost as f64 * l * l.sqrt() * 0.5).ceil() as u32
     }
 
     pub fn upgrade(&mut self) {
         self.level += 1;
-        self.damage *= 1.25;
-        self.range *= 1.08;
-        self.fire_cooldown *= 0.92;
+        // Damage: +8% per level (compounds to massive at high levels)
+        self.damage *= 1.08;
+        // Range: +1.5% per level, capped at 3x base
+        self.range *= 1.015;
+        // Fire rate: 2% faster, cooldown floor of 0.02s
+        self.fire_cooldown = (self.fire_cooldown * 0.98).max(0.02);
         if self.kind == TowerKind::Hive {
-            self.max_drones += 1; // +1 drone per upgrade
+            // +1 drone every 3 levels
+            if self.level % 3 == 0 {
+                self.max_drones += 1;
+            }
         }
     }
 }

@@ -187,7 +187,12 @@ impl GameState {
         let y = rng.gen_range(40.0..WORLD_H - 40.0);
         let x = WORLD_W + 20.0;
 
-        let enemy = Enemy::new(self.next_enemy_id, spawn.kind, x, y);
+        let mut enemy = Enemy::new(self.next_enemy_id, spawn.kind, x, y);
+        // Apply wave scaling
+        enemy.hp *= spawn.hp_mult;
+        enemy.max_hp *= spawn.hp_mult;
+        enemy.speed *= spawn.speed_mult;
+        enemy.damage *= spawn.hp_mult.sqrt(); // damage scales slower
         self.next_enemy_id += 1;
         self.enemies.push(enemy);
 
@@ -450,10 +455,11 @@ impl GameState {
                                 self.stats.damage_dealt += drone.damage.min(enemy.hp);
                                 enemy.take_damage(drone.damage);
                                 if !enemy.alive {
+                                    let wb = 1 + self.wave.number / 5;
                                     let (score_val, money_val) = match enemy.kind {
-                                        EnemyKind::Drone => { self.stats.drones_killed += 1; (10, 4) },
-                                        EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25, 12) },
-                                        EnemyKind::Tank => { self.stats.tanks_killed += 1; (100, 35) },
+                                        EnemyKind::Drone => { self.stats.drones_killed += 1; (10 * wb, 4 * wb) },
+                                        EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25 * wb, 12 * wb) },
+                                        EnemyKind::Tank => { self.stats.tanks_killed += 1; (100 * wb, 35 * wb) },
                                     };
                                     self.score += score_val;
                                     self.money += money_val;
@@ -562,10 +568,12 @@ impl GameState {
                             enemy.take_damage(proj.damage);
                             proj.alive = false;
                             if !enemy.alive {
+                                // Rewards scale with wave number
+                                let wave_bonus = 1 + self.wave.number / 5;
                                 let (score_val, money_val) = match enemy.kind {
-                                    EnemyKind::Drone =>  { self.stats.drones_killed += 1; (10, 4) },
-                                    EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25, 12) },
-                                    EnemyKind::Tank =>   { self.stats.tanks_killed += 1; (100, 35) },
+                                    EnemyKind::Drone =>  { self.stats.drones_killed += 1; (10 * wave_bonus, 4 * wave_bonus) },
+                                    EnemyKind::Fighter => { self.stats.fighters_killed += 1; (25 * wave_bonus, 12 * wave_bonus) },
+                                    EnemyKind::Tank =>   { self.stats.tanks_killed += 1; (100 * wave_bonus, 35 * wave_bonus) },
                                 };
                                 self.score += score_val;
                                 self.money += money_val;
@@ -623,8 +631,9 @@ impl GameState {
             self.wave = Wave::generate(next);
             self.wave_active = false;
             self.wave_cooldown = 5.0;
-            self.money += 30; // wave bonus (nerfed)
-            self.stats.money_earned += 30;
+            let wave_reward = 30 + next * 10; // scales with wave
+            self.money += wave_reward;
+            self.stats.money_earned += wave_reward;
             self.stats.waves_survived += 1;
             if next % 2 == 0 {
                 self.max_towers += 1;
