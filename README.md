@@ -7,6 +7,10 @@
 
 **[Gameplay Video](https://github.com/vakovalskii/defendyse/releases/download/v0.3.0/gameplay2.mp4)**
 
+
+https://github.com/user-attachments/assets/f2a9896e-21bc-44eb-b09f-2ced89212d3b
+
+
 ---
 
 ## What is this?
