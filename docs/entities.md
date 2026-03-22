@@ -1,135 +1,261 @@
-# Entities & Stats
+# Entities and Stats
 
 ## Planet Core
-The player's base. Located on the left side of the screen.
 
-| Stat | Value |
-|------|-------|
-| Position | (80, 360) |
-| Radius | 40 px |
-| HP | 500 |
-| Damage | 5 |
-| Range | 150 px |
-| Fire Rate | 0.5s cooldown |
+The player's base, positioned at (90, 432).
 
-The core auto-fires at the nearest enemy in range.
-When HP reaches 0 → Game Over.
+| Stat          | Value  |
+|---------------|--------|
+| Radius        | 40px   |
+| HP            | 350    |
+| Damage        | 3.0 per enemy per strike |
+| Range         | 130px  |
+| Fire cooldown | 0.6s   |
 
----
+Core lightning hits ALL enemies within range simultaneously. Instant damage, no projectile travel time.
 
-## Towers (Techno Machines)
-All towers are techno machines with distinct geometric shapes. Towers weaken with distance from core (power system): 100% effectiveness near core, 30% at the far edge.
+## Towers
 
-### Gatling — $50
-Fast-firing, low damage, medium range. Best against Drones (scarabs).
+### Gatling Tower
+Rapid-fire bullets. Cheap, fast, single-target.
 
-| Stat | Base | Per Level (+8% DMG per level) |
-|------|------|------|
-| Damage | 1.0 | Scales +8% per level |
-| Range | 120 px | L2: 132, L3: 145 |
-| Fire Rate | 0.15s | L2: 0.135s, L3: 0.12s |
-| Shape | Green square (techno machine) | |
+| Stat          | Value  |
+|---------------|--------|
+| Cost          | $40    |
+| Damage        | 1.0    |
+| Range         | 100px  |
+| Fire cooldown | 0.18s  |
+| Projectile    | 600 px/s, size 2.0, lifetime 5.0s |
 
-### Cannon — $100
-Slow-firing, high damage, long range. Best against Tanks (crabs).
+### Cannon Tower
+Slow, heavy piercing plasma. Passes through all enemies in its path.
 
-| Stat | Base | Per Level |
-|------|------|------|
-| Damage | 20.0 | Scales +8% per level |
-| Range | 200 px | L2: 220, L3: 242 |
-| Fire Rate | 2.0s | L2: 1.8s, L3: 1.62s |
-| Shape | Orange diamond (techno machine) | |
+| Stat          | Value  |
+|---------------|--------|
+| Cost          | $90    |
+| Damage        | 15.0   |
+| Range         | 180px  |
+| Fire cooldown | 1.8s   |
+| Projectile    | 250 px/s, size 7.0, lifetime 8.0s, piercing |
 
-### Laser — $75
-Medium fire, medium damage, short range. Fast projectile.
+### Laser Tower
+Very fast shots, short range. Near-instant hit.
 
-| Stat | Base | Per Level |
-|------|------|------|
-| Damage | 3.0 | Scales +8% per level |
-| Range | 80 px | L2: 88, L3: 97 |
-| Fire Rate | 0.3s | L2: 0.27s, L3: 0.24s |
-| Shape | Magenta triangle (techno machine) | |
+| Stat          | Value  |
+|---------------|--------|
+| Cost          | $65    |
+| Damage        | 2.5    |
+| Range         | 80px   |
+| Fire cooldown | 0.22s  |
+| Projectile    | 900 px/s, size 1.5, lifetime 0.15s |
 
-### Hive (Drone Station) — $150
-Spawns autonomous drones that hunt enemies. Drones seek the nearest enemy and attack independently.
+### Hive Tower
+Deploys autonomous drones. Does not fire projectiles directly.
 
-| Stat | Base | Per Level |
-|------|------|------|
-| Drones | 2 | +1 drone every 3 levels |
-| Drone Damage | Scales +8% per level | |
-| Range | Autonomous (drones hunt freely) | |
-| Shape | Hexagonal techno station | |
+| Stat          | Value  |
+|---------------|--------|
+| Cost          | $120   |
+| Damage        | 1.5 (base drone damage) |
+| Range         | 250px (drone engagement range) |
+| Fire cooldown | N/A    |
+| Max drones    | 2 (base) |
 
-### Upgrade System
-- Upgrade cost formula: `base_cost * level * sqrt(level) * 0.5`
-- Tower upgrades grant +8% DMG per level
-- Designed for infinite scaling (1000+ levels)
+### Upgrade Formula
 
-### Placement Rules
-- **Trapezoidal placement zone**: wide near core, narrow at far edge
-- Cannot place within 60px of core center (radius 40 + 20 buffer)
-- Cannot place within 30px of another tower
-- **Max 3 same-type towers** with overlapping ranges
-- Must have enough money
+Upgrade cost:
+```
+upgrade_cost = ceil(base_cost * level * sqrt(level) * 0.5)
+```
+
+Per upgrade:
+- Damage: x1.08 (+8% per level, compounds)
+- Range: x1.015 (+1.5% per level)
+- Fire cooldown: x0.98 (-2% per level, floor 0.02s)
+
+Hive-specific: +1 max drone every 3 levels (when `level % 3 == 0`).
+
+Example upgrade costs (Gatling, base $40):
+| Level | Cost to upgrade |
+|-------|----------------|
+| 1     | $20            |
+| 2     | $57            |
+| 3     | $104           |
+| 5     | $224           |
+| 10    | $633           |
+
+### Sell Refund
+Selling returns `base_cost / 2`.
 
 ### Tower Slots
-- Start with **5 tower slots**
-- Gain **+1 slot every 2 waves**
-- Can buy additional slots for **$1000**
-
----
+- Start: 5 slots
+- +1 every 2 waves (on even wave numbers)
+- Buy additional: $1000
 
 ## Spirit Links
-Towers can be connected via Spirit Links to boost each other.
 
-### Spirit Link
-- **Cost**: $100 per link
-- **Bonus**: +20% DMG, +15% fire rate per link
-- Connect any two towers
+Connect two towers for mutual buffs.
+
+| Property            | Value   |
+|---------------------|---------|
+| Cost                | $100    |
+| Max distance        | 250px   |
+| Max links per tower | 2       |
+| DMG bonus per link  | +20%    |
+| Fire rate per link  | +15%    |
 
 ### Spirit Triangle
-- When **3 towers** are all linked to each other (forming a triangle), they create a **35% slow field** affecting enemies in the triangle area
+When 3 towers are mutually linked (A-B, B-C, A-C), the triangle interior becomes a slow field.
 
----
+| Property     | Value |
+|--------------|-------|
+| Slow factor  | 35% speed reduction |
+| Detection    | Barycentric coordinate point-in-triangle test |
 
-## Enemies (Organic Creatures)
-All enemies are organic, biological creatures from the swarm.
+Links break when a tower is moved, sold, or destroyed by a black hole.
 
-### Drone — Scarab Bug
-Simple kamikaze unit. Cheap, expendable. Visually resembles a scarab beetle.
+## Enemies
 
-| Stat | Value |
-|------|-------|
-| HP | 1 (scales +8% per wave) |
-| Speed | 120 px/s |
-| Kamikaze Damage | 10 |
-| Can Shoot | No |
-| Size | 4 px |
-| Kill Reward | $5 + 10 score (scales with wave number) |
-| Visual | Scarab bug (organic) |
+### Drone
+Small, fast, fragile swarmers. Move toward core, no ranged attack.
 
-### Fighter — Squid/Octopus
-Fast, can shoot at the core. Dangerous. Visually resembles a squid or octopus.
+| Stat          | Base value |
+|---------------|-----------|
+| HP            | 1.0       |
+| Speed         | 65 px/s   |
+| Damage        | 8.0 (on core contact) |
+| Size          | 4px       |
+| Can shoot     | No        |
 
-| Stat | Value |
-|------|-------|
-| HP | 4 (scales +8% per wave) |
-| Speed | 180 px/s |
-| Kamikaze Damage | 15 |
-| Can Shoot | Yes (2 dmg, 1.5s cooldown, 300px range) |
-| Size | 6 px |
-| Kill Reward | $15 + 25 score (scales with wave number) |
-| Visual | Squid/octopus (organic) |
+### Fighter
+Mid-size, fast, ranged attacker. Shoots at core when within 300px.
 
-### Tank — Crab
-Slow, massive HP. Deals huge damage on contact. Visually resembles a crab.
+| Stat          | Base value |
+|---------------|-----------|
+| HP            | 4.0       |
+| Speed         | 75 px/s   |
+| Damage        | 12.0 (on core contact) |
+| Size          | 6px       |
+| Can shoot     | Yes       |
+| Fire cooldown | 1.5s      |
+| Shot damage   | 2.0 (fixed projectile damage) |
+| Shoot range   | 300px     |
 
-| Stat | Value |
-|------|-------|
-| HP | 150 (scales +8% per wave) |
-| Speed | 40 px/s |
-| Kamikaze Damage | 50 |
-| Can Shoot | No |
-| Size | 12 px |
-| Kill Reward | $50 + 100 score (scales with wave number) |
-| Visual | Crab (organic) |
+### Tank
+Large, slow, massive HP. No ranged attack but devastating on contact.
+
+| Stat          | Base value |
+|---------------|-----------|
+| HP            | 80.0      |
+| Speed         | 20 px/s   |
+| Damage        | 40.0 (on core contact) |
+| Size          | 12px      |
+| Can shoot     | No        |
+
+### Wave Scaling Applied to Enemies
+- HP: `base_hp * hp_mult` (where `hp_mult = 1.0 + (wave - 1) * 0.05`)
+- Speed: `base_speed * speed_mult` (where `speed_mult = min(1.0 + wave * 0.003, 1.5)`)
+- Damage: `base_damage * sqrt(hp_mult)` (damage scales slower than HP)
+- Tanks get additional speed penalty: `speed_mult * 0.9`
+
+### Kill Rewards
+Base values, scaled by wave bonus:
+```
+wave_bonus = 1 + saturating_sub(wave_number, 10) / 10
+```
+(Waves 1-10: bonus=1. Wave 20: bonus=2. Wave 30: bonus=3.)
+
+| Enemy   | Score       | Money       |
+|---------|-------------|-------------|
+| Drone   | 10 * wb     | 4 * wb      |
+| Fighter | 25 * wb     | 12 * wb     |
+| Tank    | 100 * wb    | 35 * wb     |
+
+Player ship kills also grant XP equal to `score_value / 2`.
+
+## Player Ship
+
+Controllable fighter ship with auto-aim and XP progression.
+
+### Base Stats
+| Stat          | Value  |
+|---------------|--------|
+| HP            | 60     |
+| Speed         | 180 px/s |
+| Damage        | 3.0    |
+| Fire cooldown | 0.25s  |
+| Heal rate     | 20 HP/s (when near core) |
+| Heal range    | core.radius + 60 (100px from core center) |
+| Shot spread   | 1 (single shot) |
+| Respawn timer | 3.0s   |
+| Respawn HP    | 50% of max_hp |
+| Invuln on respawn | 2.0s |
+| Projectile    | PlayerShot: 500 px/s, size 3.0, lifetime 4.0s |
+
+### XP System (Auto Level-up)
+- Starting XP to next: 15
+- XP gained: `score_value / 2` per kill
+
+On level up:
+- max_hp += 8
+- hp += 8 (capped at max_hp)
+- damage *= 1.1
+- xp_to_next = floor(xp_to_next * 1.3)
+
+XP overflows carry over (while loop processes multiple level-ups).
+
+### Manual Upgrade (costs money)
+- Starting cost: $80
+
+On upgrade:
+- level += 1
+- max_hp += 15
+- hp = max_hp (full heal)
+- damage *= 1.2
+- speed += 8
+- fire_cooldown *= 0.93 (floor 0.05s)
+- heal_rate += 3.0
+- Every 3 levels (when `level % 3 == 0`): shot_spread += 1 (max 7)
+- Next cost: floor(cost * 1.5)
+
+### Combat
+- Ram damage: deals `player.damage * 2.0` to enemy, takes `enemy.damage * 0.5`
+- Invulnerability timer prevents damage when > 0
+
+## Black Holes
+
+Environmental hazard that spawns on placement zone borders.
+
+| Stat          | Value  |
+|---------------|--------|
+| Visual radius | 15px   |
+| Pull radius   | 150px  |
+| Pull force    | 80 px/s^2 |
+| Kill radius   | 12px   |
+| Lifetime      | 8.0s   |
+| Spawn interval| 15-30s (random) |
+| Initial timer | 20s    |
+| Rotation speed| 3.0 rad/s |
+
+Effects:
+- Pulls enemies, towers, drones, projectiles toward center
+- Destroys enemies at kill_radius (no reward)
+- Destroys towers at kill_radius (removes links and drones)
+- Only spawns during active waves
+- Spawns on right, top, or bottom edges of placement zone
+
+## Hive Drones
+
+Autonomous units spawned by Hive towers.
+
+| Stat           | Value  |
+|----------------|--------|
+| Speed          | 200 px/s |
+| Damage         | hive.damage * hive.energy |
+| Attack cooldown| 0.8s   |
+| Attack range   | 15px   |
+| Orbit radius   | 25px (idle) |
+| Orbit speed    | 2.0 rad/s |
+| Return threshold| 30px from hive |
+
+States: Idle (orbiting hive) -> Attacking (flying to target) -> Returning (back to hive).
+Drones are removed when their hive is sold or destroyed.
