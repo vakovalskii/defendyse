@@ -4,6 +4,78 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const towerMenu = document.getElementById('tower-menu');
 
+// ---- SUPABASE LEADERBOARD ----
+const SB_URL = 'https://cpsympiswakeujnpmbtc.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwc3ltcGlzd2FrZXVqbnBtYnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODE5MTYsImV4cCI6MjA4OTc1NzkxNn0.EzHFc8NYFhvrM9PCmDS7V5Xo5Ssayv_sk_f7MZrJFiw';
+let sbUser = null;
+let scoreSubmitted = false;
+
+async function sbLogin() {
+  // Open GitHub OAuth in default browser
+  const redirectTo = 'https://vakovalskii.github.io/defendyse/leaderboard/';
+  const authUrl = `${SB_URL}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(redirectTo)}`;
+  // In Tauri, open external URL
+  if (window.__TAURI__ && window.__TAURI__.shell) {
+    window.__TAURI__.shell.open(authUrl);
+  } else {
+    window.open(authUrl, '_blank');
+  }
+}
+
+async function sbCheckToken() {
+  const token = localStorage.getItem('sb_access_token');
+  if (!token) return null;
+  try {
+    const res = await fetch(`${SB_URL}/auth/v1/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SB_KEY }
+    });
+    if (res.ok) {
+      sbUser = await res.json();
+      return sbUser;
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function submitScoreOnce(st) {
+  if (scoreSubmitted || !sbUser) return;
+  scoreSubmitted = true;
+  const token = localStorage.getItem('sb_access_token');
+  if (!token) return;
+  const meta = sbUser.user_metadata || {};
+  try {
+    await fetch(`${SB_URL}/rest/v1/leaderboard`, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_id: sbUser.id,
+        github_username: meta.user_name || meta.preferred_username || 'anonymous',
+        github_avatar: meta.avatar_url || '',
+        github_url: `https://github.com/${meta.user_name || meta.preferred_username || ''}`,
+        score: st.score,
+        wave: st.wave.number,
+        ship_level: st.player ? st.player.level : 1,
+        towers_placed: st.stats ? st.stats.towers_placed : 0,
+      })
+    });
+    addFloatingText(canvas.width / 2, canvas.height / 2 + 60, 'Score submitted!', '#0f0');
+  } catch(e) {
+    console.error('Score submit failed:', e);
+  }
+}
+
+// Reset score submission flag on restart
+const origRestart = restartGame;
+
+// Try to load saved token on startup
+sbCheckToken();
+
+
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resize); resize();
 
@@ -343,7 +415,7 @@ document.addEventListener('click', (e) => {
   if (menuTower && !towerMenu.contains(e.target)) closeTowerMenu();
 });
 async function togglePause() { await invoke('toggle_pause'); }
-async function restartGame() { await invoke('restart_game'); document.getElementById('game-over').style.display = 'none'; }
+async function restartGame() { scoreSubmitted = false; await invoke('restart_game'); document.getElementById('game-over').style.display = 'none'; }
 
 // ---- PLAYER SHIP INPUT ----
 const playerKeys = { up: false, down: false, left: false, right: false, fire: false };
@@ -420,6 +492,11 @@ function showMenu(mode) {
   const btns = document.getElementById('menu-buttons');
   document.getElementById('menu-help').style.display = 'none';
 
+  const loginBtn = sbUser
+    ? `<div style="color:#4af;font-size:12px;margin:8px 0">Logged in as ${(sbUser.user_metadata||{}).user_name||'Player'}</div>`
+    : `<button class="sm-btn sm-help-btn" onclick="sbLogin()">Sign in with GitHub</button>`;
+  const lbBtn = `<a class="sm-btn sm-help-btn" href="https://vakovalskii.github.io/defendyse/leaderboard/" target="_blank" style="text-decoration:none;display:inline-block">Leaderboard</a>`;
+
   if (mode === 'start') {
     title.textContent = 'DEFENDYSE';
     title.style.fontSize = '64px';
@@ -427,6 +504,8 @@ function showMenu(mode) {
     sub.style.display = '';
     btns.innerHTML = `
       <button class="sm-btn" onclick="startGame()">START GAME</button>
+      ${loginBtn}
+      ${lbBtn}
       <button class="sm-btn sm-help-btn" onclick="toggleMenuHelp()">CONTROLS</button>`;
   } else {
     title.textContent = 'PAUSED';
@@ -435,6 +514,8 @@ function showMenu(mode) {
     btns.innerHTML = `
       <button class="sm-btn" onclick="resumeGame()">CONTINUE</button>
       <button class="sm-btn" onclick="menuRestart()">RESTART</button>
+      ${loginBtn}
+      ${lbBtn}
       <button class="sm-btn sm-help-btn" onclick="toggleMenuHelp()">CONTROLS</button>`;
   }
   menu.style.display = 'flex';
@@ -494,6 +575,7 @@ window.togglePause = togglePause;
 window.restartGame = restartGame;
 window.resumeGame = resumeGame;
 window.menuRestart = menuRestart;
+window.sbLogin = sbLogin;
 
 // ======== RENDER ========
 function render() {
@@ -552,6 +634,8 @@ function render() {
   if (state.game_over) {
     document.getElementById('game-over').style.display = 'block';
     document.getElementById('final-score').textContent = state.score;
+    if (document.getElementById('final-wave')) document.getElementById('final-wave').textContent = state.wave.number;
+    submitScoreOnce(state);
   }
   if (state.wave.number !== lastWaveNum && state.wave.started) {
     lastWaveNum = state.wave.number;

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Defendyse — Leaderboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #05050c;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      min-height: 100vh;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    header {
+      text-align: center;
+      padding: 40px 0 30px;
+    }
+    h1 {
+      font-size: 42px;
+      letter-spacing: 8px;
+      color: #4af;
+      text-shadow: 0 0 30px rgba(68,170,255,0.4);
+      margin-bottom: 8px;
+    }
+    .subtitle { color: #668; font-size: 14px; letter-spacing: 4px; }
+    .auth-section {
+      text-align: center;
+      margin: 20px 0;
+    }
+    .btn {
+      display: inline-block;
+      padding: 10px 24px;
+      background: rgba(20,20,50,0.8);
+      border: 1px solid rgba(100,200,255,0.3);
+      color: #4af;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: rgba(40,40,80,0.8); border-color: #4af; box-shadow: 0 0 15px rgba(68,170,255,0.3); }
+    .btn-github { color: #fff; border-color: #444; }
+    .btn-github:hover { border-color: #888; }
+    .user-info {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      margin: 15px 0;
+    }
+    .user-info img { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #4af; }
+    .user-info span { color: #4af; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th {
+      text-align: left;
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(100,200,255,0.2);
+      color: #668;
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 13px;
+    }
+    tr:hover td { background: rgba(68,170,255,0.03); }
+    .rank { color: #668; width: 40px; }
+    .rank-1 { color: #fc0; font-weight: bold; text-shadow: 0 0 10px rgba(255,200,0,0.4); }
+    .rank-2 { color: #ccc; }
+    .rank-3 { color: #c84; }
+    .player-cell { display: flex; align-items: center; gap: 10px; }
+    .player-cell img { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #333; }
+    .player-cell a { color: #4af; text-decoration: none; }
+    .player-cell a:hover { text-decoration: underline; }
+    .score-cell { color: #0f0; font-weight: bold; font-size: 15px; }
+    .wave-cell { color: #ff0; }
+    .ship-cell { color: #0fc; }
+    .time-cell { color: #666; font-size: 11px; }
+    .empty { text-align: center; padding: 60px; color: #444; }
+    .download-link {
+      text-align: center;
+      margin: 30px 0;
+      padding: 20px;
+      border: 1px solid rgba(100,200,255,0.1);
+      border-radius: 8px;
+      background: rgba(10,10,30,0.5);
+    }
+    .download-link a { color: #4af; text-decoration: none; font-size: 16px; }
+    .download-link a:hover { text-decoration: underline; }
+    .download-link p { color: #668; font-size: 12px; margin-top: 8px; }
+    .loading { text-align: center; padding: 40px; color: #668; }
+    footer { text-align: center; padding: 40px 0 20px; color: #333; font-size: 11px; }
+    footer a { color: #446; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>DEFENDYSE</h1>
+      <div class="subtitle">LEADERBOARD</div>
+    </header>
+
+    <div class="auth-section">
+      <div id="auth-login">
+        <button class="btn btn-github" onclick="loginWithGitHub()">Sign in with GitHub</button>
+      </div>
+      <div id="auth-user" style="display:none">
+        <div class="user-info">
+          <img id="user-avatar" src="" alt="">
+          <span id="user-name"></span>
+          <button class="btn" onclick="logout()" style="font-size:11px;padding:5px 12px">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="leaderboard-loading" class="loading">Loading scores...</div>
+    <table id="leaderboard-table" style="display:none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Player</th>
+          <th>Score</th>
+          <th>Wave</th>
+          <th>Ship</th>
+          <th>When</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+    <div id="leaderboard-empty" class="empty" style="display:none">
+      No scores yet. Be the first to play!
+    </div>
+
+    <div class="download-link">
+      <a href="https://github.com/vakovalskii/defendyse/releases/latest">Download Defendyse</a>
+      <p>Windows / macOS / Linux</p>
+    </div>
+
+    <footer>
+      <a href="https://github.com/vakovalskii/defendyse">GitHub Repo</a> — Built with Rust + Tauri v2
+    </footer>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://cpsympiswakeujnpmbtc.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwc3ltcGlzd2FrZXVqbnBtYnRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODE5MTYsImV4cCI6MjA4OTc1NzkxNn0.EzHFc8NYFhvrM9PCmDS7V5Xo5Ssayv_sk_f7MZrJFiw';
+
+    const headers = {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Auth state
+    let currentUser = null;
+
+    async function checkSession() {
+      // Check URL for auth callback tokens
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get('access_token');
+        if (accessToken) {
+          localStorage.setItem('sb_access_token', accessToken);
+          window.location.hash = '';
+        }
+      }
+
+      const token = localStorage.getItem('sb_access_token');
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_KEY }
+        });
+        if (res.ok) {
+          const user = await res.json();
+          currentUser = user;
+          showUser(user);
+        } else {
+          localStorage.removeItem('sb_access_token');
+        }
+      } catch (e) {
+        console.error('Session check failed:', e);
+      }
+    }
+
+    function showUser(user) {
+      const meta = user.user_metadata || {};
+      document.getElementById('auth-login').style.display = 'none';
+      document.getElementById('auth-user').style.display = 'block';
+      document.getElementById('user-avatar').src = meta.avatar_url || '';
+      document.getElementById('user-name').textContent = meta.user_name || meta.preferred_username || user.email || 'Player';
+    }
+
+    function loginWithGitHub() {
+      const redirectTo = window.location.origin + window.location.pathname;
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=github&redirect_to=${encodeURIComponent(redirectTo)}`;
+    }
+
+    function logout() {
+      localStorage.removeItem('sb_access_token');
+      currentUser = null;
+      document.getElementById('auth-login').style.display = 'block';
+      document.getElementById('auth-user').style.display = 'none';
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/leaderboard?select=*&order=score.desc&limit=50`,
+          { headers }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        document.getElementById('leaderboard-loading').style.display = 'none';
+
+        if (data.length === 0) {
+          document.getElementById('leaderboard-empty').style.display = 'block';
+          return;
+        }
+
+        document.getElementById('leaderboard-table').style.display = 'table';
+        const tbody = document.getElementById('leaderboard-body');
+        tbody.innerHTML = data.map((row, i) => {
+          const rank = i + 1;
+          const rankClass = rank <= 3 ? `rank-${rank}` : '';
+          const avatar = row.github_avatar || '';
+          const name = row.github_username || 'Anonymous';
+          const url = row.github_url || '#';
+          const ago = timeAgo(new Date(row.created_at));
+          return `<tr>
+            <td class="rank ${rankClass}">${rank}</td>
+            <td><div class="player-cell">${avatar ? `<img src="${avatar}" alt="">` : ''}<a href="${url}" target="_blank">${name}</a></div></td>
+            <td class="score-cell">${row.score.toLocaleString()}</td>
+            <td class="wave-cell">${row.wave}</td>
+            <td class="ship-cell">L${row.ship_level || 1}</td>
+            <td class="time-cell">${ago}</td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('leaderboard-loading').textContent = 'Failed to load scores';
+        console.error(e);
+      }
+    }
+
+    function timeAgo(date) {
+      const seconds = Math.floor((new Date() - date) / 1000);
+      if (seconds < 60) return 'just now';
+      if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+      if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+      return Math.floor(seconds / 86400) + 'd ago';
+    }
+
+    // Init
+    checkSession();
+    loadLeaderboard();
+  </script>
+</body>
+</html>
